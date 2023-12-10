@@ -1,5 +1,16 @@
-version: "3.7"
+version: "3.8"
 services:
+  poll:
+    build: .
+    container_name: poll
+    env_file:
+      - .env
+    depends_on:
+      - influxdb
+    devices:
+      - /dev/ttyUSB0
+    restart: always
+
   influxdb:
     image: influxdb:latest
     container_name: influxdb
@@ -11,7 +22,6 @@ services:
     restart: always
     ports:
       - 8086:8086
-
 
   grafana:
     image: grafana/grafana-oss:latest
