@@ -1,0 +1,31 @@
+version: "3.7"
+services:
+  influxdb:
+    image: influxdb:latest
+    container_name: influxdb
+    volumes:
+      - influxdb:/var/lib/influxdb2:rw
+    env_file:
+      - .env
+    entrypoint: ["./entrypoint.sh"]
+    restart: always
+    ports:
+      - 8086:8086
+
+
+  grafana:
+    image: grafana/grafana-oss:latest
+    container_name: grafana
+    volumes:
+      - grafana:/var/lib/grafana:rw
+    depends_on:
+      - influxdb
+    environment:
+      - GF_AUTH_ANONYMOUS_ENABLED=true
+    restart: always
+    ports:
+      - 3000:3000
+
+volumes:
+  influxdb:
+  grafana:
