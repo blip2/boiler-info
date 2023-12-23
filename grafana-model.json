@@ -79,11 +79,40 @@
             ]
           }
         },
-        "overrides": []
+        "overrides": [
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "temp1"
+            },
+            "properties": [
+              {
+                "id": "custom.axisPlacement",
+                "value": "right"
+              },
+              {
+                "id": "custom.axisLabel",
+                "value": "Shell Temperature (C)"
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "pressure"
+            },
+            "properties": [
+              {
+                "id": "custom.axisLabel",
+                "value": "Pressure (Bar)"
+              }
+            ]
+          }
+        ]
       },
       "gridPos": {
-        "h": 19,
-        "w": 17,
+        "h": 6,
+        "w": 16,
         "x": 0,
         "y": 0
       },
@@ -106,7 +135,7 @@
             "type": "influxdb",
             "uid": "a814682c-77a0-4855-b395-0b00034cedcd"
           },
-          "query": "from(bucket: \"data\")\r\n  |> range(start: v.timeRangeStart, stop:v.timeRangeStop)\r\n  |> filter(fn: (r) =>\r\n    r._field == \"water\"\r\n  )",
+          "query": "from(bucket: \"data\")\r\n  |> range(start: v.timeRangeStart, stop:v.timeRangeStop)\r\n  |> filter(fn: (r) =>\r\n    r._field == \"temp1\"\r\n  )",
           "refId": "A"
         },
         {
@@ -133,45 +162,42 @@
           "color": {
             "mode": "thresholds"
           },
-          "custom": {
-            "neutral": 100
-          },
           "fieldMinMax": false,
           "mappings": [],
-          "max": 150,
+          "max": 10,
           "min": 0,
           "thresholds": {
             "mode": "absolute",
             "steps": [
               {
-                "color": "transparent",
+                "color": "blue",
                 "value": null
               },
               {
-                "color": "blue",
-                "value": 40
+                "color": "green",
+                "value": 3
               },
               {
-                "color": "green",
-                "value": 90
+                "color": "yellow",
+                "value": 6.5
               },
               {
                 "color": "red",
-                "value": 110
+                "value": 7.2
               }
             ]
           },
-          "unit": "pressurepsi"
+          "unit": "pressurebar"
         },
         "overrides": []
       },
       "gridPos": {
-        "h": 13,
-        "w": 7,
-        "x": 17,
+        "h": 6,
+        "w": 8,
+        "x": 16,
         "y": 0
       },
-      "id": 3,
+      "id": 5,
       "options": {
         "minVizHeight": 75,
         "minVizWidth": 75,
@@ -209,6 +235,225 @@
       "fieldConfig": {
         "defaults": {
           "color": {
+            "mode": "shades"
+          },
+          "custom": {
+            "fillOpacity": 70,
+            "hideFrom": {
+              "legend": false,
+              "tooltip": false,
+              "viz": false
+            },
+            "insertNulls": false,
+            "lineWidth": 0,
+            "spanNulls": false
+          },
+          "mappings": [],
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "green",
+                "value": null
+              }
+            ]
+          }
+        },
+        "overrides": []
+      },
+      "gridPos": {
+        "h": 6,
+        "w": 16,
+        "x": 0,
+        "y": 6
+      },
+      "id": 2,
+      "options": {
+        "alignValue": "left",
+        "legend": {
+          "displayMode": "list",
+          "placement": "bottom",
+          "showLegend": false
+        },
+        "mergeValues": true,
+        "rowHeight": 0.9,
+        "showValue": "auto",
+        "tooltip": {
+          "mode": "single",
+          "sort": "none"
+        }
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "influxdb",
+            "uid": "a814682c-77a0-4855-b395-0b00034cedcd"
+          },
+          "query": "from(bucket: \"data\")\r\n  |> range(start: v.timeRangeStart, stop:v.timeRangeStop)\r\n  |> filter(fn: (r) =>\r\n    r._field == \"running\" or\r\n    r._field == \"lockout\" or \r\n    r._field == \"feedpump\"\r\n  )",
+          "refId": "A"
+        }
+      ],
+      "title": "Status",
+      "type": "state-timeline"
+    },
+    {
+      "datasource": {
+        "type": "influxdb",
+        "uid": "a814682c-77a0-4855-b395-0b00034cedcd"
+      },
+      "description": "",
+      "fieldConfig": {
+        "defaults": {
+          "color": {
+            "mode": "continuous-GrYlRd"
+          },
+          "fieldMinMax": false,
+          "mappings": [],
+          "min": 0,
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "transparent",
+                "value": null
+              }
+            ]
+          },
+          "unit": "celsius"
+        },
+        "overrides": []
+      },
+      "gridPos": {
+        "h": 6,
+        "w": 8,
+        "x": 16,
+        "y": 6
+      },
+      "id": 7,
+      "options": {
+        "minVizHeight": 75,
+        "minVizWidth": 75,
+        "orientation": "auto",
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ],
+          "fields": "",
+          "values": false
+        },
+        "showThresholdLabels": true,
+        "showThresholdMarkers": true
+      },
+      "pluginVersion": "10.2.2",
+      "targets": [
+        {
+          "datasource": {
+            "type": "influxdb",
+            "uid": "a814682c-77a0-4855-b395-0b00034cedcd"
+          },
+          "query": "from(bucket: \"data\")\r\n  |> range(start: v.timeRangeStart, stop:v.timeRangeStop)\r\n  |> filter(fn: (r) =>\r\n    r._field == \"temp1\"\r\n  )",
+          "refId": "A"
+        }
+      ],
+      "title": "Shell Temperature",
+      "type": "gauge"
+    },
+    {
+      "datasource": {
+        "type": "influxdb",
+        "uid": "a814682c-77a0-4855-b395-0b00034cedcd"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "color": {
+            "mode": "palette-classic"
+          },
+          "custom": {
+            "axisBorderShow": false,
+            "axisCenteredZero": false,
+            "axisColorMode": "text",
+            "axisLabel": "",
+            "axisPlacement": "auto",
+            "barAlignment": 0,
+            "drawStyle": "line",
+            "fillOpacity": 0,
+            "gradientMode": "none",
+            "hideFrom": {
+              "legend": false,
+              "tooltip": false,
+              "viz": false
+            },
+            "insertNulls": false,
+            "lineInterpolation": "linear",
+            "lineWidth": 1,
+            "pointSize": 5,
+            "scaleDistribution": {
+              "type": "linear"
+            },
+            "showPoints": "auto",
+            "spanNulls": false,
+            "stacking": {
+              "group": "A",
+              "mode": "none"
+            },
+            "thresholdsStyle": {
+              "mode": "off"
+            }
+          },
+          "mappings": [],
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "green",
+                "value": null
+              }
+            ]
+          }
+        },
+        "overrides": []
+      },
+      "gridPos": {
+        "h": 6,
+        "w": 16,
+        "x": 0,
+        "y": 12
+      },
+      "id": 6,
+      "options": {
+        "legend": {
+          "calcs": [],
+          "displayMode": "list",
+          "placement": "bottom",
+          "showLegend": true
+        },
+        "tooltip": {
+          "mode": "single",
+          "sort": "none"
+        }
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "influxdb",
+            "uid": "a814682c-77a0-4855-b395-0b00034cedcd"
+          },
+          "query": "from(bucket: \"data\")\r\n  |> range(start: v.timeRangeStart, stop:v.timeRangeStop)\r\n  |> filter(fn: (r) =>\r\n    r._field == \"water\"\r\n  )",
+          "refId": "A"
+        }
+      ],
+      "title": "Water Use",
+      "type": "timeseries"
+    },
+    {
+      "datasource": {
+        "type": "influxdb",
+        "uid": "a814682c-77a0-4855-b395-0b00034cedcd"
+      },
+      "description": "",
+      "fieldConfig": {
+        "defaults": {
+          "color": {
             "mode": "thresholds"
           },
           "fieldMinMax": false,
@@ -228,9 +473,9 @@
       },
       "gridPos": {
         "h": 6,
-        "w": 7,
-        "x": 17,
-        "y": 13
+        "w": 8,
+        "x": 16,
+        "y": 12
       },
       "id": 4,
       "options": {
@@ -261,76 +506,6 @@
       ],
       "title": "Water Use (Last Fill)",
       "type": "stat"
-    },
-    {
-      "datasource": {
-        "type": "influxdb",
-        "uid": "a814682c-77a0-4855-b395-0b00034cedcd"
-      },
-      "description": "",
-      "fieldConfig": {
-        "defaults": {
-          "color": {
-            "mode": "shades"
-          },
-          "custom": {
-            "fillOpacity": 70,
-            "hideFrom": {
-              "legend": false,
-              "tooltip": false,
-              "viz": false
-            },
-            "insertNulls": false,
-            "lineWidth": 0,
-            "spanNulls": false
-          },
-          "mappings": [],
-          "thresholds": {
-            "mode": "absolute",
-            "steps": [
-              {
-                "color": "green",
-                "value": null
-              }
-            ]
-          }
-        },
-        "overrides": []
-      },
-      "gridPos": {
-        "h": 7,
-        "w": 17,
-        "x": 0,
-        "y": 19
-      },
-      "id": 2,
-      "options": {
-        "alignValue": "left",
-        "legend": {
-          "displayMode": "list",
-          "placement": "bottom",
-          "showLegend": false
-        },
-        "mergeValues": true,
-        "rowHeight": 0.9,
-        "showValue": "auto",
-        "tooltip": {
-          "mode": "single",
-          "sort": "none"
-        }
-      },
-      "targets": [
-        {
-          "datasource": {
-            "type": "influxdb",
-            "uid": "a814682c-77a0-4855-b395-0b00034cedcd"
-          },
-          "query": "from(bucket: \"data\")\r\n  |> range(start: v.timeRangeStart, stop:v.timeRangeStop)\r\n  |> filter(fn: (r) =>\r\n    r._field == \"running\" or\r\n    r._field == \"lockout\" or \r\n    r._field == \"feedpump\"\r\n  )",
-          "refId": "A"
-        }
-      ],
-      "title": "Status",
-      "type": "state-timeline"
     }
   ],
   "refresh": "5s",
@@ -340,13 +515,13 @@
     "list": []
   },
   "time": {
-    "from": "now-3h",
+    "from": "now-15m",
     "to": "now"
   },
   "timepicker": {},
   "timezone": "",
   "title": "Boiler Data",
   "uid": "f747e50f-ea53-4778-b217-4ffcc0ea5421",
-  "version": 8,
+  "version": 22,
   "weekStart": ""
 }
