@@ -35,10 +35,10 @@ def get_data():
         instrument.write_long(30, 0)
         pulse5 = instrument.read_long(30, functioncode=4)
 
-    ui1 = instrument.read_register(70)  # mV
-    pressure = ui1 / 1
-    temp1 = instrument.read_register(73, number_of_decimals=1)  # C
-
+    ui1 = instrument.read_register(70, number_of_decimals=3)  # mV / kPSI
+    pressure = float(ui1)
+    ui2 = instrument.read_register(73, number_of_decimals=1)  # C
+    temp1 = float(ui2)
 
     data = {
         "running": dis[0],
