@@ -37,7 +37,7 @@ def get_data():
 
     ui1 = instrument.read_register(70)  # mV
     pressure = ui1 / 1
-    temp1 = instrument.read_register(73)  # C
+    temp1 = instrument.read_register(73, number_of_decimals=1)  # C
 
 
     data = {
