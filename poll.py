@@ -37,6 +37,8 @@ def get_data():
 
     ui1 = instrument.read_register(70)  # mV
     pressure = ui1 / 1
+    temp1 = instrument.read_register(73)  # C
+
 
     data = {
         "running": dis[0],
@@ -44,6 +46,7 @@ def get_data():
         "feedpump": dis[2],
         "water": pulse5,
         "pressure": pressure,
+        "temp1": temp1,
     }
 
     # print(data)
@@ -55,6 +58,7 @@ def get_data():
         .field("feedpump", dis[2])
         .field("water", pulse5)
         .field("pressure", pressure)
+        .field("temp1", temp1)
     )
     write_api.write(bucket=bucket, org=org, record=p)
 
