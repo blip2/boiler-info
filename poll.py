@@ -64,5 +64,8 @@ def get_data():
 
 
 while True:
-    get_data()
+    try:
+        get_data()
+    except minimalmodbus.NoResponseError:
+        pass
     time.sleep(15)
