@@ -66,6 +66,7 @@
             }
           },
           "mappings": [],
+          "min": 0,
           "thresholds": {
             "mode": "absolute",
             "steps": [
@@ -86,7 +87,7 @@
             "properties": [
               {
                 "id": "custom.axisPlacement",
-                "value": "left"
+                "value": "right"
               },
               {
                 "id": "displayName",
@@ -102,7 +103,7 @@
             "properties": [
               {
                 "id": "custom.axisPlacement",
-                "value": "right"
+                "value": "auto"
               },
               {
                 "id": "displayName",
@@ -111,7 +112,7 @@
               {
                 "id": "color",
                 "value": {
-                  "fixedColor": "dark-purple",
+                  "fixedColor": "red",
                   "mode": "fixed"
                 }
               },
@@ -236,7 +237,7 @@
             "type": "influxdb",
             "uid": "a814682c-77a0-4855-b395-0b00034cedcd"
           },
-          "query": "from(bucket: \"data\")\r\n  |> range(start: v.timeRangeStart, stop:v.timeRangeStop)\r\n  |> filter(fn: (r) =>\r\n    r._field == \"pressure\"\r\n  )",
+          "query": "from(bucket: \"data\")\r\n  |> range(start: v.timeRangeStart, stop:v.timeRangeStop)\r\n  |> filter(fn: (r) =>\r\n    r._field == \"pressure\"\r\n  )\r\n  |> last()",
           "refId": "A"
         }
       ],
@@ -352,18 +353,30 @@
       "fieldConfig": {
         "defaults": {
           "color": {
-            "mode": "continuous-BlYlRd"
+            "mode": "thresholds"
           },
           "fieldMinMax": false,
           "mappings": [],
-          "max": 100,
+          "max": 160,
           "min": 0,
           "thresholds": {
             "mode": "absolute",
             "steps": [
               {
-                "color": "transparent",
+                "color": "blue",
                 "value": null
+              },
+              {
+                "color": "purple",
+                "value": 30
+              },
+              {
+                "color": "#EF843C",
+                "value": 80
+              },
+              {
+                "color": "red",
+                "value": 120
               }
             ]
           },
@@ -399,7 +412,7 @@
             "type": "influxdb",
             "uid": "a814682c-77a0-4855-b395-0b00034cedcd"
           },
-          "query": "from(bucket: \"data\")\r\n  |> range(start: v.timeRangeStart, stop:v.timeRangeStop)\r\n  |> filter(fn: (r) =>\r\n    r._field == \"temp1\"\r\n  )",
+          "query": "from(bucket: \"data\")\r\n  |> range(start: v.timeRangeStart, stop:v.timeRangeStop)\r\n  |> filter(fn: (r) =>\r\n    r._field == \"temp1\"\r\n  )\r\n  |> last()",
           "refId": "A"
         }
       ],
@@ -614,13 +627,13 @@
     "list": []
   },
   "time": {
-    "from": "now-24h",
+    "from": "now-6h",
     "to": "now"
   },
   "timepicker": {},
   "timezone": "",
   "title": "Boiler Data",
   "uid": "f747e50f-ea53-4778-b217-4ffcc0ea5421",
-  "version": 25,
+  "version": 27,
   "weekStart": ""
 }
