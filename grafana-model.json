@@ -66,6 +66,7 @@
             }
           },
           "mappings": [],
+          "max": 160,
           "min": 0,
           "thresholds": {
             "mode": "absolute",
@@ -192,16 +193,20 @@
                 "value": null
               },
               {
-                "color": "green",
+                "color": "purple",
                 "value": 3
               },
               {
-                "color": "yellow",
-                "value": 6.5
+                "color": "green",
+                "value": 6
+              },
+              {
+                "color": "orange",
+                "value": 7.5
               },
               {
                 "color": "red",
-                "value": 7.2
+                "value": 8
               }
             ]
           },
@@ -620,20 +625,20 @@
       "type": "state-timeline"
     }
   ],
-  "refresh": "10s",
+  "refresh": "30s",
   "schemaVersion": 38,
   "tags": [],
   "templating": {
     "list": []
   },
   "time": {
-    "from": "now-6h",
+    "from": "now-3h",
     "to": "now"
   },
   "timepicker": {},
   "timezone": "",
   "title": "Boiler Data",
   "uid": "f747e50f-ea53-4778-b217-4ffcc0ea5421",
-  "version": 27,
+  "version": 31,
   "weekStart": ""
 }
