@@ -12,6 +12,9 @@ client = influxdb_client.InfluxDBClient(
 )
 write_api = client.write_api(write_options=influxdb_client.client.write_api.SYNCHRONOUS)
 
+IO_ADDRESS = 1
+METER_ADDRESS = 2
+
 
 def expandRegister(value):
     return [x == "1" for x in "{0:05b}".format(value)[::-1]]
@@ -21,23 +24,23 @@ def buildRegister(value):
     return int("".join([str(int(x)) for x in value]), 2)
 
 
-instrument = minimalmodbus.Instrument(
-    os.environ["SERIAL_DEVICE"], int(os.environ["SERIAL_ADDRESS"])
-)
+io_device = minimalmodbus.Instrument(os.environ["SERIAL_DEVICE"], IO_ADDRESS)
+
+meter_device = minimalmodbus.Instrument(os.environ["SERIAL_DEVICE"], METER_ADDRESS)
 
 
-def get_data():
-    di = instrument.read_register(15)
+def get_io_data():
+    di = io_device.read_register(15)
     dis = expandRegister(di)
 
-    pulse5 = instrument.read_long(30, functioncode=4)
+    pulse5 = io_device.read_long(30, functioncode=4)
     if not dis[2] and pulse5:
-        instrument.write_long(30, 0)
-        pulse5 = instrument.read_long(30, functioncode=4)
+        io_device.write_long(30, 0)
+        pulse5 = io_device.read_long(30, functioncode=4)
 
-    ui1 = instrument.read_register(70, number_of_decimals=3)  # mV / kPSI
+    ui1 = io_device.read_register(70, number_of_decimals=3)  # mV / kPSI
     pressure = float(ui1)
-    ui2 = instrument.read_register(73, number_of_decimals=1)  # C
+    ui2 = io_device.read_register(73, number_of_decimals=1)  # C
     temp1 = float(ui2)
 
     data = {
@@ -63,9 +66,50 @@ def get_data():
     write_api.write(bucket=bucket, org=org, record=p)
 
 
+def get_meter_data():
+    meter_longs = {
+        "i1": 3000,
+        "i2": 3002,
+        "i3": 3004,
+        "v12": 3020,
+        "v23": 3022,
+        "v31": 3024,
+        "v1": 3028,
+        "v2": 3030,
+        "v3": 3032,
+        "kw1": 3054,
+        "kw2": 3056,
+        "kw3": 3058,
+        "kw": 3060,
+        "hz": 3110,
+        "kWh": 45001,
+    }
+
+    meter_output = {}
+
+    for key, value in meter_longs:
+        data = meter_device.read_long(value)
+        if data:
+            meter_output[key] = data
+
+    p = influxdb_client.Point.from_dict(
+        {
+            "measurement": "boiler",
+            "fields": meter_output,
+        },
+        influxdb_client.WritePrecision.NS,
+    )
+    write_api.write(bucket=bucket, org=org, record=p)
+
+
+count = 1
 while True:
     try:
-        get_data()
+        if count >= 15:
+            get_io_data()
+            count = 0
+        get_meter_data()
     except minimalmodbus.NoResponseError:
         pass
-    time.sleep(15)
+    time.sleep(1)
+    count += 1
