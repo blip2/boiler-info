@@ -7,4 +7,4 @@ RUN pip install --no-cache-dir -r requirements.txt
 
 COPY poll.py .
 
-CMD [ "python", "poll.py" ]
+CMD [ "python", "-u", "poll.py" ]

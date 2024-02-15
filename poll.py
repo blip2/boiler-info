@@ -52,8 +52,6 @@ def get_io_data():
         "temp1": temp1,
     }
 
-    # print(data)
-
     p = (
         influxdb_client.Point("boiler")
         .field("running", dis[0])
@@ -68,29 +66,27 @@ def get_io_data():
 
 def get_meter_data():
     meter_longs = {
-        "i1": 3000,
-        "i2": 3002,
-        "i3": 3004,
-        "v12": 3020,
-        "v23": 3022,
-        "v31": 3024,
-        "v1": 3028,
-        "v2": 3030,
-        "v3": 3032,
-        "kw1": 3054,
-        "kw2": 3056,
-        "kw3": 3058,
-        "kw": 3060,
-        "hz": 3110,
-        "kWh": 45001,
+        "i1": 2999,
+        "i2": 3001,
+        "i3": 3003,
+        "v12": 3019,
+        "v23": 3021,
+        "v31": 3023,
+        "v1": 3027,
+        "v2": 3029,
+        "v3": 3031,
+        "kw1": 3053,
+        "kw2": 3055,
+        "kw3": 3057,
+        "kw": 3059,
+        "hz": 3109,
+        "kWh": 45099,
     }
 
     meter_output = {}
 
-    for key, value in meter_longs:
-        data = meter_device.read_long(value)
-        if data:
-            meter_output[key] = data
+    for key in meter_longs:
+        meter_output[key] = meter_device.read_float(meter_longs[key])
 
     p = influxdb_client.Point.from_dict(
         {
@@ -100,7 +96,6 @@ def get_meter_data():
         influxdb_client.WritePrecision.NS,
     )
     write_api.write(bucket=bucket, org=org, record=p)
-
 
 count = 1
 while True:
