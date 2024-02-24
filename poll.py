@@ -39,7 +39,7 @@ def get_io_data():
         pulse5 = io_device.read_long(30, functioncode=4)
 
     ui1 = io_device.read_register(70, number_of_decimals=3)  # mV / kPSI
-    pressure = (float(ui1)-0.76)/0.324  # convert from 4-20mA signal across ~190 Ohm
+    pressure = (float(ui1)-0.7)/0.325  # convert from 4-20mA signal across ~190 Ohm
     ui2 = io_device.read_register(73, number_of_decimals=1)  # C
     temp1 = float(ui2)
 
@@ -100,7 +100,7 @@ def get_meter_data():
 count = 1
 while True:
     try:
-        if count >= 15:
+        if count >= 10:
             get_io_data()
             count = 0
         get_meter_data()
