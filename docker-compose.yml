@@ -1,4 +1,3 @@
-version: "3.8"
 services:
   poll:
     build: .
@@ -15,7 +14,7 @@ services:
     image: influxdb:latest
     container_name: influxdb
     volumes:
-      - influxdb:/var/lib/influxdb2:rw
+      - ./influxdb:/var/lib/influxdb2:rw
     env_file:
       - .env
     entrypoint: ["./entrypoint.sh"]
@@ -27,7 +26,7 @@ services:
     image: grafana/grafana-oss:latest
     container_name: grafana
     volumes:
-      - grafana:/var/lib/grafana:rw
+      - ./grafana:/var/lib/grafana:rw
     depends_on:
       - influxdb
     environment:
@@ -35,7 +34,3 @@ services:
     restart: always
     ports:
       - 3000:3000
-
-volumes:
-  influxdb:
-  grafana:

@@ -42,6 +42,10 @@ def get_io_data():
     pressure = (float(ui1)-0.7)/0.325  # convert from 4-20mA signal across ~190 Ohm
     ui2 = io_device.read_register(73, number_of_decimals=1)  # C
     temp1 = float(ui2)
+    ui3 = io_device.read_register(75, number_of_decimals=1)  # C
+    temp2 = float(ui3)
+    ui4 = io_device.read_register(77, number_of_decimals=1)  # C
+    temp3 = float(ui4)
     ui5 = io_device.read_register(78, number_of_decimals=1)  # mV
     damper = float(ui5)
 
@@ -52,6 +56,8 @@ def get_io_data():
         "water": pulse5,
         "pressure": pressure,
         "temp1": temp1,
+        "temp2": temp2,
+        "temp3": temp3,
         "damper": damper,
     }
 
@@ -63,6 +69,8 @@ def get_io_data():
         .field("water", pulse5)
         .field("pressure", pressure)
         .field("temp1", temp1)
+        .field("temp2", temp2)
+        .field("temp3", temp3)
         .field("damper", damper)
     )
     write_api.write(bucket=bucket, org=org, record=p)
