@@ -31,6 +31,14 @@ services:
       - influxdb
     environment:
       - GF_AUTH_ANONYMOUS_ENABLED=true
+      - GF_SERVER_ROOT_URL=https://boiler.blip2.net/
     restart: always
     ports:
       - 3000:3000
+
+  grafana-ntfy:
+    image: academo/grafana-ntfy:latest
+    hostname: grafana-ntfy
+    expose:
+      - 8080
+    command: "-ntfy-url=https://ntfy.blip2.net/lmws"
