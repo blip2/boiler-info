@@ -14,6 +14,7 @@ write_api = client.write_api(write_options=influxdb_client.client.write_api.SYNC
 
 IO_ADDRESS = 1
 METER_ADDRESS = 2
+STEAM_ADDRESS = 3
 
 
 def expandRegister(value):
@@ -27,6 +28,8 @@ def buildRegister(value):
 io_device = minimalmodbus.Instrument(os.environ["SERIAL_DEVICE"], IO_ADDRESS)
 
 meter_device = minimalmodbus.Instrument(os.environ["SERIAL_DEVICE"], METER_ADDRESS)
+
+steam_device = minimalmodbus.Instrument(os.environ["SERIAL_DEVICE"], STEAM_ADDRESS)
 
 
 def get_io_data():
@@ -46,8 +49,8 @@ def get_io_data():
     temp2 = float(ui3)
     ui4 = io_device.read_register(77, number_of_decimals=1)  # C
     temp3 = float(ui4)
-    ui5 = io_device.read_register(78, number_of_decimals=1)  # mV
-    damper = float(ui5)
+    ui5 = io_device.read_register(78, number_of_decimals=3)  # mV
+    steam = (float(ui5)-0.7)/0.325
 
     data = {
         "running": dis[0],
@@ -58,7 +61,7 @@ def get_io_data():
         "temp1": temp1,
         "temp2": temp2,
         "temp3": temp3,
-        "damper": damper,
+        "steam": steam,
     }
 
     p = (
@@ -71,7 +74,7 @@ def get_io_data():
         .field("temp1", temp1)
         .field("temp2", temp2)
         .field("temp3", temp3)
-        .field("damper", damper)
+        .field("steam", steam)
     )
     write_api.write(bucket=bucket, org=org, record=p)
 
@@ -109,14 +112,11 @@ def get_meter_data():
     )
     write_api.write(bucket=bucket, org=org, record=p)
 
-count = 1
+
 while True:
     try:
-        if count >= 10:
-            get_io_data()
-            count = 0
+        get_io_data()
         get_meter_data()
     except minimalmodbus.NoResponseError:
         pass
-    time.sleep(1)
-    count += 1
+    time.sleep(0.1)
