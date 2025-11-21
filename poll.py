@@ -50,7 +50,8 @@ def get_io_data():
     ui4 = io_device.read_register(77, number_of_decimals=1)  # C
     temp3 = float(ui4)
     ui5 = io_device.read_register(78, number_of_decimals=3)  # mV
-    steam = (float(ui5)-0.7)/0.325
+    #steam = ((float(ui5)))
+    steam = ((float(ui5)/.23625)-4)/0.0032
 
     data = {
         "running": dis[0],
