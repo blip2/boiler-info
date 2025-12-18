@@ -1,3 +1,5 @@
+# pip install pandas influxdb_client
+
 from influxdb_client import InfluxDBClient
 import pandas as pd
 from datetime import datetime, timedelta
@@ -17,15 +19,16 @@ diff = 1
 
 df = pd.DataFrame()
 
-start = datetime(year=2025, month=11, day=20)
-while start < datetime.now()+timedelta(days=diff):
-    stop = start + timedelta(days=diff)
+start = datetime(year=2025, month=11, day=28)
+position = start
+while position < start+timedelta(days=diff):
+    stop = position + timedelta(days=diff)
     
     print(f"getting data from {start} to {stop}")
 
     query= f"""
     from(bucket: "data")
-    |> range(start:{int(start.timestamp())}, stop: {int(stop.timestamp())})
+    |> range(start:{int(position.timestamp())}, stop: {int(stop.timestamp())})
     |> pivot(rowKey:["_time"], columnKey: ["_field"], valueColumn: "_value")"""
 
     output = query_api.query_data_frame(org="pi", query=query)
@@ -35,8 +38,10 @@ while start < datetime.now()+timedelta(days=diff):
 
     df = pd.concat([df, output])
 
-    start = start + timedelta(days=diff)
+    position = position + timedelta(days=diff)
 
-print(df)
-df.to_hdf("lmws_data.h5", key="boiler", append=True)
+# print(df)
+
+df.to_csv("lmws_data_2025-11-28.csv")
+# df.to_hdf("lmws_data.h5", key="boiler", append=True)
 
