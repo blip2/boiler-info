@@ -7,7 +7,7 @@ from datetime import datetime, timedelta
 bucket = "data"
 org = "pi"
 client = InfluxDBClient(
-    url="http://192.168.1.184:8086",
+    url="http://localhost:8086",
     token="9PoWBQdMoza6Rb",
     org="pi",
     timeout=30000,
@@ -16,15 +16,17 @@ client = InfluxDBClient(
 query_api = client.query_api()
 
 diff = 1
+start = datetime(year=2025, month=12, day=1)
+end = datetime(year=2025, month=12, day=24)
 
-df = pd.DataFrame()
 
-start = datetime(year=2025, month=11, day=28)
 position = start
-while position < start+timedelta(days=diff):
+while position < end:
+    df = pd.DataFrame()
+    
     stop = position + timedelta(days=diff)
     
-    print(f"getting data from {start} to {stop}")
+    print(f"getting data from {position} to {stop}")
 
     query= f"""
     from(bucket: "data")
@@ -42,6 +44,7 @@ while position < start+timedelta(days=diff):
 
 # print(df)
 
-df.to_csv("lmws_data_2025-11-28.csv")
+    df.to_csv(f"lmws_data_{position}.csv")
+    print(f"exported data to lmws_data_{position}.csv")
 # df.to_hdf("lmws_data.h5", key="boiler", append=True)
 

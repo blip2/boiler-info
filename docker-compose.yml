@@ -11,7 +11,7 @@ services:
     restart: always
 
   influxdb:
-    image: influxdb:latest
+    image: influxdb:2
     container_name: influxdb
     volumes:
       - ./influxdb:/var/lib/influxdb2:rw
