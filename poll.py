@@ -53,27 +53,13 @@ def get_io_data():
         "running": dis[0],
         "lockout": dis[1],
         "feedpump": dis[2],
-        "water": pulse5,
         "pressure": pressure,
         "temp1": temp1,
         "temp2": temp2,
         "temp3": temp3,
-        "damper": damper,
     }
 
-    p = (
-        influxdb_client.Point("boiler")
-        .field("running", dis[0])
-        .field("lockout", dis[1])
-        .field("feedpump", dis[2])
-        .field("water", pulse5)
-        .field("pressure", pressure)
-        .field("temp1", temp1)
-        .field("temp2", temp2)
-        .field("temp3", temp3)
-        .field("damper", damper)
-    )
-    write_api.write(bucket=bucket, org=org, record=p)
+    return data
 
 
 def get_meter_data():
@@ -100,10 +86,13 @@ def get_meter_data():
     for key in meter_longs:
         meter_output[key] = meter_device.read_float(meter_longs[key])
 
+    return meter_output
+
+def push_data(data):
     p = influxdb_client.Point.from_dict(
         {
             "measurement": "boiler",
-            "fields": meter_output,
+            "fields": data,
         },
         influxdb_client.WritePrecision.NS,
     )
@@ -112,10 +101,12 @@ def get_meter_data():
 count = 1
 while True:
     try:
+        data = {}
         if count >= 10:
-            get_io_data()
+            data.update(get_io_data())
             count = 0
-        get_meter_data()
+        data.update(get_meter_data())
+        push_data(data)
     except minimalmodbus.NoResponseError:
         pass
     time.sleep(1)
