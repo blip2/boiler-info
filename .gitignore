@@ -3,5 +3,7 @@
 grafana/
 influxdb/
 *.csv
+*.csv.gz
 *.h5
 *.ipynb_checkpoints
+*.zip
