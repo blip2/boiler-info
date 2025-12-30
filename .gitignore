@@ -7,3 +7,4 @@ influxdb/
 *.h5
 *.ipynb_checkpoints
 *.zip
+*.png
