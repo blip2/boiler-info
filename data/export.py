@@ -17,7 +17,7 @@ query_api = client.query_api()
 
 diff = 1
 start = datetime(year=2025, month=12, day=1)
-end = datetime(year=2025, month=12, day=24)
+end = datetime(year=2026, month=1, day=24)
 
 
 position = start

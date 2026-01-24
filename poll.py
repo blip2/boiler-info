@@ -98,16 +98,16 @@ def push_data(data):
     )
     write_api.write(bucket=bucket, org=org, record=p)
 
-count = 1
+count = 0
 while True:
     try:
         data = {}
-        if count >= 10:
+        if count > 4:
             data.update(get_io_data())
             count = 0
         data.update(get_meter_data())
         push_data(data)
+        count += 1
     except minimalmodbus.NoResponseError:
         pass
     time.sleep(1)
-    count += 1
