@@ -101,7 +101,8 @@ validate_export_config() {
 }
 
 get_measurements() {
-    log_info "Fetching measurements from InfluxDB 2..."
+    # Note: log to stderr so it doesn't mix with the output
+    echo "[INFO] Fetching measurements from InfluxDB 2..." >&2
 
     influx query \
         --host "$INFLUX2_HOST" \
@@ -109,8 +110,8 @@ get_measurements() {
         --token "$INFLUX2_TOKEN" \
         --raw \
         "import \"influxdata/influxdb/schema\"
-         schema.measurements(bucket: \"$INFLUX2_BUCKET\")" \
-    | tail -n +2 | grep -v "^$" | grep -v "^_" | cut -d',' -f4 | sort -u
+         schema.measurements(bucket: \"$INFLUX2_BUCKET\")" 2>/dev/null \
+    | grep -v "^#" | grep -v "^," | grep -v "^$" | tail -n +2 | cut -d',' -f4 | grep -v "^_" | grep -v "string" | sort -u
 }
 
 export_measurement() {
@@ -136,6 +137,12 @@ export_measurement() {
         rm -f "$output_file.csv"
         return
     fi
+
+    # Debug: show CSV file info
+    local csv_lines=$(wc -l < "$output_file.csv")
+    log_info "CSV has $csv_lines lines"
+    log_info "First 10 lines of CSV:"
+    head -10 "$output_file.csv" | while read line; do echo "    $line"; done
 
     # Convert CSV to Line Protocol
     log_info "Converting to line protocol..."
@@ -169,24 +176,49 @@ def format_field_value(value):
 def parse_time(time_str):
     time_str = time_str.rstrip('Z')
     if '.' in time_str:
-        # Handle microseconds
-        if len(time_str.split('.')[-1]) > 6:
-            time_str = time_str[:time_str.index('.') + 7]
+        # Handle microseconds/nanoseconds - truncate to 6 digits
+        parts = time_str.split('.')
+        if len(parts[1]) > 6:
+            time_str = parts[0] + '.' + parts[1][:6]
         dt = datetime.fromisoformat(time_str)
     else:
         dt = datetime.fromisoformat(time_str)
     return int(dt.timestamp() * 1_000_000_000)
 
-with open(csv_file, 'r') as infile, open(lp_file, 'w') as outfile:
-    reader = csv.DictReader(infile)
-    count = 0
+with open(csv_file, 'r') as infile:
+    # Skip annotation lines (start with #) to find the actual header
+    lines = infile.readlines()
 
+# Filter out annotation lines and empty lines
+data_lines = []
+header_found = False
+for line in lines:
+    stripped = line.strip()
+    if not stripped:
+        continue
+    if stripped.startswith('#'):
+        continue
+    # First non-annotation, non-empty line is the header
+    data_lines.append(line)
+
+if len(data_lines) < 2:
+    print(f"  No data rows found in CSV", file=sys.stderr)
+    print(f"  Total: 0 points exported", file=sys.stderr)
+    sys.exit(0)
+
+# Debug: show first few lines
+print(f"  CSV header: {data_lines[0].strip()[:100]}...", file=sys.stderr)
+print(f"  First data: {data_lines[1].strip()[:100]}...", file=sys.stderr)
+
+import io
+csv_content = ''.join(data_lines)
+reader = csv.DictReader(io.StringIO(csv_content))
+
+count = 0
+with open(lp_file, 'w') as outfile:
     for row in reader:
-        if row.get('', '').startswith('#'):
-            continue
-
         measurement = row.get('_measurement', default_measurement)
-        if not measurement or measurement.startswith('#'):
+        if not measurement:
             continue
 
         time_val = row.get('_time', row.get('time', ''))
@@ -195,39 +227,41 @@ with open(csv_file, 'r') as infile, open(lp_file, 'w') as outfile:
 
         try:
             timestamp = parse_time(time_val)
-        except:
+        except Exception as e:
+            print(f"  Time parse error: {e} for {time_val}", file=sys.stderr)
             continue
 
         # Collect tags (non-underscore, non-numeric string values)
         tags = []
         tag_keys = set()
         for key, value in row.items():
-            if key.startswith('_') or key in ('', 'result', 'table', 'time'):
+            if not key or key.startswith('_') or key in ('result', 'table', 'time'):
                 continue
-            if key == '_field' or key == '_value':
+            if not value:
                 continue
             try:
                 float(value)
-                continue
+                continue  # numeric = field, not tag
             except:
                 if value.lower() in ('true', 'false'):
-                    continue
-                if value:
-                    tags.append(f"{escape_tag(key)}={escape_tag(value)}")
-                    tag_keys.add(key)
+                    continue  # boolean = field, not tag
+                tags.append(f"{escape_tag(key)}={escape_tag(value)}")
+                tag_keys.add(key)
 
         # Collect fields
         fields = []
-        if '_field' in row and '_value' in row:
+        if '_field' in row and '_value' in row and row['_field'] and row['_value']:
             field_name = row['_field']
             field_value = format_field_value(row['_value'])
             if field_value:
                 fields.append(f"{escape_field_key(field_name)}={field_value}")
         else:
             for key, value in row.items():
-                if key.startswith('_') or key in ('', 'result', 'table', 'time'):
+                if not key or key.startswith('_') or key in ('result', 'table', 'time'):
                     continue
                 if key in tag_keys:
+                    continue
+                if not value:
                     continue
                 field_value = format_field_value(value)
                 if field_value:
@@ -245,7 +279,7 @@ with open(csv_file, 'r') as infile, open(lp_file, 'w') as outfile:
         if count % 10000 == 0:
             print(f"  Processed {count} points...", file=sys.stderr)
 
-    print(f"  Total: {count} points exported", file=sys.stderr)
+print(f"  Total: {count} points exported", file=sys.stderr)
 PYTHON_SCRIPT
 
     rm -f "$output_file.csv"
