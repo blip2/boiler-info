@@ -42,11 +42,9 @@ physical_cols = [
     "lockout",
     "pressure",
     "running",
-    "steam",
     "temp1",
     "temp2",
     "temp3",
-    "water",
 ]
 
 df_electrical = (

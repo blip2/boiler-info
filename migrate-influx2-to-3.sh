@@ -4,13 +4,13 @@ set -e
 # ============================================================================
 # InfluxDB 2 to InfluxDB 3 Migration Script
 # ============================================================================
-# This script exports all data from an InfluxDB 2 instance and imports it
-# into an InfluxDB 3 instance.
+# Two-stage migration:
+#   Stage 1: ./migrate-influx2-to-3.sh export  - Export from InfluxDB 2
+#   Stage 2: ./migrate-influx2-to-3.sh import  - Import into InfluxDB 3
 #
 # Prerequisites:
 #   - influx CLI (v2) installed for export
-#   - influxdb3 CLI installed for import (or use docker exec)
-#   - Access to both InfluxDB 2 and InfluxDB 3 instances
+#   - influxdb3 CLI or docker for import
 # ============================================================================
 
 # --- Configuration ---
@@ -27,20 +27,56 @@ INFLUX3_TOKEN="${INFLUX3_TOKEN:-}"
 
 # Export settings
 EXPORT_DIR="${EXPORT_DIR:-./influx_export}"
-BATCH_SIZE="${BATCH_SIZE:-10000}"
 
 # --- Colors for output ---
 RED='\033[0;31m'
 GREEN='\033[0;32m'
 YELLOW='\033[1;33m'
+BLUE='\033[0;34m'
 NC='\033[0m' # No Color
 
 log_info() { echo -e "${GREEN}[INFO]${NC} $1"; }
 log_warn() { echo -e "${YELLOW}[WARN]${NC} $1"; }
 log_error() { echo -e "${RED}[ERROR]${NC} $1"; }
+log_step() { echo -e "${BLUE}[STEP]${NC} $1"; }
 
-# --- Validate configuration ---
-validate_config() {
+# --- Show usage ---
+usage() {
+    echo "Usage: $0 <command>"
+    echo ""
+    echo "Commands:"
+    echo "  export    Export data from InfluxDB 2 to line protocol files"
+    echo "  import    Import line protocol files into InfluxDB 3"
+    echo ""
+    echo "Environment variables for export:"
+    echo "  INFLUX2_HOST    InfluxDB 2 URL (default: http://localhost:8086)"
+    echo "  INFLUX2_ORG     InfluxDB 2 organization (required)"
+    echo "  INFLUX2_BUCKET  Bucket to export (default: data)"
+    echo "  INFLUX2_TOKEN   InfluxDB 2 API token (required)"
+    echo "  EXPORT_DIR      Directory for exported files (default: ./influx_export)"
+    echo ""
+    echo "Environment variables for import:"
+    echo "  INFLUX3_HOST      InfluxDB 3 URL (default: http://localhost:8181)"
+    echo "  INFLUX3_DATABASE  Database to import into (default: data)"
+    echo "  INFLUX3_TOKEN     InfluxDB 3 token (optional for Core edition)"
+    echo "  EXPORT_DIR        Directory containing exported files (default: ./influx_export)"
+    echo "  IMPORT_METHOD     Import method: auto, docker, http (default: auto)"
+    echo ""
+    echo "Example:"
+    echo "  # Stage 1: Export from InfluxDB 2"
+    echo "  export INFLUX2_ORG=myorg INFLUX2_TOKEN=mytoken"
+    echo "  $0 export"
+    echo ""
+    echo "  # Stage 2: Import to InfluxDB 3"
+    echo "  $0 import"
+    exit 1
+}
+
+# ============================================================================
+# STAGE 1: EXPORT FROM INFLUXDB 2
+# ============================================================================
+
+validate_export_config() {
     local missing=0
 
     if [[ -z "$INFLUX2_TOKEN" ]]; then
@@ -53,22 +89,17 @@ validate_config() {
         missing=1
     fi
 
+    if ! command -v influx &> /dev/null; then
+        log_error "influx CLI (v2) is required for export"
+        log_info "Install from: https://docs.influxdata.com/influxdb/v2/tools/influx-cli/"
+        missing=1
+    fi
+
     if [[ $missing -eq 1 ]]; then
-        echo ""
-        echo "Usage: Set environment variables before running:"
-        echo "  export INFLUX2_HOST=http://localhost:8086"
-        echo "  export INFLUX2_ORG=your-org"
-        echo "  export INFLUX2_BUCKET=data"
-        echo "  export INFLUX2_TOKEN=your-influx2-token"
-        echo "  export INFLUX3_HOST=http://localhost:8181"
-        echo "  export INFLUX3_DATABASE=data"
-        echo "  export INFLUX3_TOKEN=your-influx3-token  # optional for InfluxDB 3 Core"
-        echo ""
         exit 1
     fi
 }
 
-# --- Get list of measurements from InfluxDB 2 ---
 get_measurements() {
     log_info "Fetching measurements from InfluxDB 2..."
 
@@ -82,14 +113,13 @@ get_measurements() {
     | tail -n +2 | grep -v "^$" | grep -v "^_" | cut -d',' -f4 | sort -u
 }
 
-# --- Export data from InfluxDB 2 to Line Protocol ---
 export_measurement() {
     local measurement=$1
     local output_file="$EXPORT_DIR/${measurement}.lp"
 
-    log_info "Exporting measurement: $measurement"
+    log_step "Exporting measurement: $measurement"
 
-    # Export using Flux query to line protocol format
+    # Export using Flux query to CSV
     influx query \
         --host "$INFLUX2_HOST" \
         --org "$INFLUX2_ORG" \
@@ -97,10 +127,10 @@ export_measurement() {
         --raw \
         "from(bucket: \"$INFLUX2_BUCKET\")
          |> range(start: 1970-01-01T00:00:00Z)
+         |> filter(fn: (r) => r._measurement == \"$measurement\")
          |> drop(columns: [\"_start\", \"_stop\"])" \
     > "$output_file.csv" 2>/dev/null || true
 
-    # Check if we got data
     if [[ ! -s "$output_file.csv" ]]; then
         log_warn "No data exported for measurement: $measurement"
         rm -f "$output_file.csv"
@@ -108,7 +138,7 @@ export_measurement() {
     fi
 
     # Convert CSV to Line Protocol
-    log_info "Converting $measurement to line protocol..."
+    log_info "Converting to line protocol..."
     python3 - "$output_file.csv" "$output_file" "$measurement" << 'PYTHON_SCRIPT'
 import sys
 import csv
@@ -119,56 +149,46 @@ lp_file = sys.argv[2]
 default_measurement = sys.argv[3]
 
 def escape_tag(s):
-    """Escape special characters in tag keys/values"""
     return str(s).replace('\\', '\\\\').replace(' ', '\\ ').replace(',', '\\,').replace('=', '\\=')
 
 def escape_field_key(s):
-    """Escape special characters in field keys"""
     return str(s).replace('\\', '\\\\').replace(' ', '\\ ').replace(',', '\\,').replace('=', '\\=')
 
 def format_field_value(value):
-    """Format field value for line protocol"""
     if value == '' or value is None:
         return None
-    # Try to detect type
     if value.lower() in ('true', 'false'):
         return value.lower()
     try:
-        # Check if it's an integer
         if '.' not in value and 'e' not in value.lower():
             return str(int(value)) + 'i'
-        # Otherwise treat as float
         return str(float(value))
     except ValueError:
-        # It's a string
         return '"' + value.replace('\\', '\\\\').replace('"', '\\"') + '"'
 
 def parse_time(time_str):
-    """Convert RFC3339 timestamp to nanoseconds"""
-    # Handle various timestamp formats
     time_str = time_str.rstrip('Z')
     if '.' in time_str:
+        # Handle microseconds
+        if len(time_str.split('.')[-1]) > 6:
+            time_str = time_str[:time_str.index('.') + 7]
         dt = datetime.fromisoformat(time_str)
     else:
         dt = datetime.fromisoformat(time_str)
-    # Convert to nanoseconds since epoch
     return int(dt.timestamp() * 1_000_000_000)
 
 with open(csv_file, 'r') as infile, open(lp_file, 'w') as outfile:
     reader = csv.DictReader(infile)
-
     count = 0
+
     for row in reader:
-        # Skip annotation rows
         if row.get('', '').startswith('#'):
             continue
 
-        # Get measurement name
         measurement = row.get('_measurement', default_measurement)
         if not measurement or measurement.startswith('#'):
             continue
 
-        # Get timestamp
         time_val = row.get('_time', row.get('time', ''))
         if not time_val:
             continue
@@ -178,39 +198,36 @@ with open(csv_file, 'r') as infile, open(lp_file, 'w') as outfile:
         except:
             continue
 
-        # Build tags
+        # Collect tags (non-underscore, non-numeric string values)
         tags = []
+        tag_keys = set()
         for key, value in row.items():
             if key.startswith('_') or key in ('', 'result', 'table', 'time'):
                 continue
             if key == '_field' or key == '_value':
                 continue
-            # Detect if it's a tag (non-numeric, non-boolean)
             try:
                 float(value)
-                continue  # It's numeric, skip as tag
+                continue
             except:
                 if value.lower() in ('true', 'false'):
-                    continue  # It's boolean, skip as tag
+                    continue
                 if value:
                     tags.append(f"{escape_tag(key)}={escape_tag(value)}")
+                    tag_keys.add(key)
 
-        # Build fields
+        # Collect fields
         fields = []
-
-        # Handle pivoted data (field name in _field, value in _value)
         if '_field' in row and '_value' in row:
             field_name = row['_field']
             field_value = format_field_value(row['_value'])
             if field_value:
                 fields.append(f"{escape_field_key(field_name)}={field_value}")
         else:
-            # Handle unpivoted data (each column is a field)
             for key, value in row.items():
                 if key.startswith('_') or key in ('', 'result', 'table', 'time'):
                     continue
-                # Skip if it's already identified as a tag
-                if any(key in t for t in tags):
+                if key in tag_keys:
                     continue
                 field_value = format_field_value(value)
                 if field_value:
@@ -219,7 +236,6 @@ with open(csv_file, 'r') as infile, open(lp_file, 'w') as outfile:
         if not fields:
             continue
 
-        # Build line protocol
         tag_str = ',' + ','.join(tags) if tags else ''
         field_str = ','.join(fields)
         line = f"{escape_tag(measurement)}{tag_str} {field_str} {timestamp}\n"
@@ -232,7 +248,6 @@ with open(csv_file, 'r') as infile, open(lp_file, 'w') as outfile:
     print(f"  Total: {count} points exported", file=sys.stderr)
 PYTHON_SCRIPT
 
-    # Clean up CSV
     rm -f "$output_file.csv"
 
     if [[ -s "$output_file" ]]; then
@@ -243,86 +258,88 @@ PYTHON_SCRIPT
     fi
 }
 
-# --- Export all data from InfluxDB 2 ---
-export_all_data() {
+do_export() {
+    echo "=============================================="
+    echo "  Stage 1: Export from InfluxDB 2"
+    echo "=============================================="
+    echo ""
+
+    validate_export_config
+
+    log_info "Source: $INFLUX2_HOST"
+    log_info "Organization: $INFLUX2_ORG"
+    log_info "Bucket: $INFLUX2_BUCKET"
+    log_info "Export directory: $EXPORT_DIR"
+    echo ""
+
     mkdir -p "$EXPORT_DIR"
 
-    # Method 1: Try to get measurements list
+    # Get measurements
     local measurements
     measurements=$(get_measurements 2>/dev/null) || true
 
     if [[ -n "$measurements" ]]; then
+        log_info "Found measurements: $measurements"
+        echo ""
         for measurement in $measurements; do
             export_measurement "$measurement"
         done
     else
-        # Method 2: Export everything as a single file
-        log_info "Could not get measurements list, exporting all data..."
+        log_warn "Could not enumerate measurements, trying 'boiler'..."
         export_measurement "boiler"
     fi
+
+    echo ""
+    log_info "Export complete!"
+    echo ""
+    echo "Exported files:"
+    ls -lh "$EXPORT_DIR"/*.lp 2>/dev/null || echo "  (no files exported)"
+    echo ""
+    echo "Next step: Run '$0 import' to import into InfluxDB 3"
 }
 
-# --- Import data into InfluxDB 3 ---
-import_to_influx3() {
-    log_info "Importing data into InfluxDB 3..."
+# ============================================================================
+# STAGE 2: IMPORT INTO INFLUXDB 3
+# ============================================================================
 
-    # Check if influxdb3 CLI is available
-    if command -v influxdb3 &> /dev/null; then
-        import_via_cli
-    else
-        import_via_docker
+validate_import_config() {
+    if [[ ! -d "$EXPORT_DIR" ]]; then
+        log_error "Export directory not found: $EXPORT_DIR"
+        log_info "Run '$0 export' first"
+        exit 1
     fi
-}
 
-import_via_cli() {
-    for lp_file in "$EXPORT_DIR"/*.lp; do
-        if [[ ! -f "$lp_file" ]]; then
-            continue
-        fi
-
-        local filename=$(basename "$lp_file")
-        log_info "Importing $filename..."
-
-        local auth_args=""
-        if [[ -n "$INFLUX3_TOKEN" ]]; then
-            auth_args="--token $INFLUX3_TOKEN"
-        fi
-
-        influxdb3 write \
-            --host "$INFLUX3_HOST" \
-            --database "$INFLUX3_DATABASE" \
-            $auth_args \
-            --file "$lp_file"
-
-        log_info "Imported $filename successfully"
-    done
+    local lp_files=$(ls "$EXPORT_DIR"/*.lp 2>/dev/null | wc -l)
+    if [[ $lp_files -eq 0 ]]; then
+        log_error "No .lp files found in $EXPORT_DIR"
+        log_info "Run '$0 export' first"
+        exit 1
+    fi
 }
 
 import_via_docker() {
-    log_info "Using docker exec to import data..."
+    log_info "Importing via docker exec..."
 
-    # Copy files to container
     for lp_file in "$EXPORT_DIR"/*.lp; do
         if [[ ! -f "$lp_file" ]]; then
             continue
         fi
 
         local filename=$(basename "$lp_file")
-        log_info "Importing $filename via docker..."
+        local lines=$(wc -l < "$lp_file")
+        log_step "Importing $filename ($lines points)..."
 
         # Copy file to container
         docker cp "$lp_file" influxdb:/tmp/import.lp
 
-        # Import using influxdb3 CLI inside container
-        local auth_args=""
+        # Build command
+        local cmd="influxdb3 write --database $INFLUX3_DATABASE --file /tmp/import.lp"
         if [[ -n "$INFLUX3_TOKEN" ]]; then
-            auth_args="--token $INFLUX3_TOKEN"
+            cmd="$cmd --token $INFLUX3_TOKEN"
         fi
 
-        docker exec influxdb influxdb3 write \
-            --database "$INFLUX3_DATABASE" \
-            $auth_args \
-            --file /tmp/import.lp
+        # Import
+        docker exec influxdb $cmd
 
         # Clean up
         docker exec influxdb rm /tmp/import.lp
@@ -331,7 +348,6 @@ import_via_docker() {
     done
 }
 
-# --- Alternative: Direct HTTP API import ---
 import_via_http() {
     log_info "Importing via HTTP API..."
 
@@ -341,77 +357,117 @@ import_via_http() {
         fi
 
         local filename=$(basename "$lp_file")
-        log_info "Importing $filename via HTTP..."
+        local lines=$(wc -l < "$lp_file")
+        log_step "Importing $filename ($lines points)..."
 
         local auth_header=""
         if [[ -n "$INFLUX3_TOKEN" ]]; then
-            auth_header="-H \"Authorization: Bearer $INFLUX3_TOKEN\""
+            auth_header="Authorization: Bearer $INFLUX3_TOKEN"
         fi
 
-        # Split file into chunks if too large
-        local total_lines=$(wc -l < "$lp_file")
+        # Split into chunks if large
         local chunk_size=5000
-
-        if [[ $total_lines -gt $chunk_size ]]; then
-            log_info "Large file detected ($total_lines lines), splitting into chunks..."
+        if [[ $lines -gt $chunk_size ]]; then
+            log_info "Splitting into chunks of $chunk_size..."
             split -l $chunk_size "$lp_file" "$lp_file.chunk."
 
+            local chunk_num=0
             for chunk in "$lp_file.chunk."*; do
-                curl -s -X POST "$INFLUX3_HOST/api/v2/write?bucket=$INFLUX3_DATABASE" \
-                    -H "Content-Type: text/plain" \
-                    ${auth_header:+-H "Authorization: Bearer $INFLUX3_TOKEN"} \
-                    --data-binary @"$chunk"
+                chunk_num=$((chunk_num + 1))
+                if [[ -n "$auth_header" ]]; then
+                    curl -sf -X POST "$INFLUX3_HOST/api/v2/write?bucket=$INFLUX3_DATABASE" \
+                        -H "Content-Type: text/plain" \
+                        -H "$auth_header" \
+                        --data-binary @"$chunk"
+                else
+                    curl -sf -X POST "$INFLUX3_HOST/api/v2/write?bucket=$INFLUX3_DATABASE" \
+                        -H "Content-Type: text/plain" \
+                        --data-binary @"$chunk"
+                fi
                 rm "$chunk"
-                echo -n "."
+                echo -ne "\r  Imported chunk $chunk_num..."
             done
             echo ""
         else
-            curl -s -X POST "$INFLUX3_HOST/api/v2/write?bucket=$INFLUX3_DATABASE" \
-                -H "Content-Type: text/plain" \
-                ${auth_header:+-H "Authorization: Bearer $INFLUX3_TOKEN"} \
-                --data-binary @"$lp_file"
+            if [[ -n "$auth_header" ]]; then
+                curl -sf -X POST "$INFLUX3_HOST/api/v2/write?bucket=$INFLUX3_DATABASE" \
+                    -H "Content-Type: text/plain" \
+                    -H "$auth_header" \
+                    --data-binary @"$lp_file"
+            else
+                curl -sf -X POST "$INFLUX3_HOST/api/v2/write?bucket=$INFLUX3_DATABASE" \
+                    -H "Content-Type: text/plain" \
+                    --data-binary @"$lp_file"
+            fi
         fi
 
         log_info "Imported $filename successfully"
     done
 }
 
-# --- Main ---
-main() {
+do_import() {
     echo "=============================================="
-    echo "  InfluxDB 2 to InfluxDB 3 Migration Script"
+    echo "  Stage 2: Import into InfluxDB 3"
     echo "=============================================="
     echo ""
 
-    validate_config
+    validate_import_config
 
-    log_info "Source: $INFLUX2_HOST (bucket: $INFLUX2_BUCKET)"
-    log_info "Destination: $INFLUX3_HOST (database: $INFLUX3_DATABASE)"
+    log_info "Destination: $INFLUX3_HOST"
+    log_info "Database: $INFLUX3_DATABASE"
+    log_info "Import directory: $EXPORT_DIR"
     echo ""
 
-    # Step 1: Export from InfluxDB 2
-    log_info "Step 1: Exporting data from InfluxDB 2..."
-    export_all_data
+    echo "Files to import:"
+    ls -lh "$EXPORT_DIR"/*.lp
+    echo ""
 
-    # Step 2: Import into InfluxDB 3
-    log_info "Step 2: Importing data into InfluxDB 3..."
+    # Determine import method
+    local method="${IMPORT_METHOD:-auto}"
 
-    # Check which import method to use
-    if [[ "${IMPORT_METHOD:-auto}" == "http" ]]; then
-        import_via_http
-    else
-        import_to_influx3
+    if [[ "$method" == "auto" ]]; then
+        if docker ps --format '{{.Names}}' | grep -q '^influxdb$'; then
+            method="docker"
+        else
+            method="http"
+        fi
     fi
 
+    log_info "Using import method: $method"
     echo ""
-    log_info "Migration complete!"
-    log_info "Exported data is saved in: $EXPORT_DIR"
+
+    case "$method" in
+        docker)
+            import_via_docker
+            ;;
+        http)
+            import_via_http
+            ;;
+        *)
+            log_error "Unknown import method: $method"
+            exit 1
+            ;;
+    esac
+
     echo ""
-    echo "Next steps:"
-    echo "  1. Verify data in InfluxDB 3 using Grafana or influxdb3 query"
-    echo "  2. Update your Grafana datasource to use SQL queries"
-    echo "  3. Once verified, you can remove the old InfluxDB 2 instance"
+    log_info "Import complete!"
+    echo ""
+    echo "You can verify the data with:"
+    echo "  docker exec influxdb influxdb3 query --database $INFLUX3_DATABASE \"SELECT COUNT(*) FROM boiler\""
 }
 
-# Run main function
-main "$@"
+# ============================================================================
+# MAIN
+# ============================================================================
+
+case "${1:-}" in
+    export)
+        do_export
+        ;;
+    import)
+        do_import
+        ;;
+    *)
+        usage
+        ;;
+esac
