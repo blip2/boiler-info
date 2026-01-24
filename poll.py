@@ -1,16 +1,13 @@
 import os
 import time
 import minimalmodbus
-import influxdb_client
+from influxdb_client_3 import InfluxDBClient3, Point
 
-bucket = os.environ["DOCKER_INFLUXDB_INIT_BUCKET"]
-org = os.environ["DOCKER_INFLUXDB_INIT_ORG"]
-client = influxdb_client.InfluxDBClient(
-    url=f"http://{os.environ['DOCKER_INFLUXDB_INIT_HOST']}:{os.environ['DOCKER_INFLUXDB_INIT_PORT']}",
-    token=os.environ["DOCKER_INFLUXDB_INIT_ADMIN_TOKEN"],
-    org=org,
+client = InfluxDBClient3(
+    host=f"http://influxdb:{os.environ['INFLUXDB_HTTP_PORT']}",
+    database=os.environ["INFLUXDB_DATABASE"],
+    token=os.environ["INFLUXDB_TOKEN"],
 )
-write_api = client.write_api(write_options=influxdb_client.client.write_api.SYNCHRONOUS)
 
 IO_ADDRESS = 1
 METER_ADDRESS = 2
@@ -39,15 +36,15 @@ def get_io_data():
         pulse5 = io_device.read_long(30, functioncode=4)
 
     ui1 = io_device.read_register(70, number_of_decimals=3)  # mV
-    pressure = (float(ui1)-0.7)/0.325  # convert from 4-20mA signal across ~190 Ohm
+    pressure = (float(ui1) - 0.7) / 0.325  # convert from 4-20mA signal across ~190 Ohm
     ui2 = io_device.read_register(73, number_of_decimals=1)  # C
     temp1 = float(ui2)
     ui3 = io_device.read_register(75, number_of_decimals=1)  # C
     temp2 = float(ui3)
     ui4 = io_device.read_register(77, number_of_decimals=1)  # C
     temp3 = float(ui4)
-    ui5 = io_device.read_register(78, number_of_decimals=1)  # mV
-    damper = float(ui5)
+    # ui5 = io_device.read_register(78, number_of_decimals=1)  # mV
+    # damper = float(ui5)
 
     data = {
         "running": dis[0],
@@ -88,15 +85,13 @@ def get_meter_data():
 
     return meter_output
 
+
 def push_data(data):
-    p = influxdb_client.Point.from_dict(
-        {
-            "measurement": "boiler",
-            "fields": data,
-        },
-        influxdb_client.WritePrecision.NS,
-    )
-    write_api.write(bucket=bucket, org=org, record=p)
+    p = Point("boiler")
+    for key, value in data.items():
+        p = p.field(key, value)
+    client.write(record=p)
+
 
 count = 1
 while True:

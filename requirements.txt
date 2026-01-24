@@ -1,2 +1,2 @@
 minimalmodbus
-influxdb-client
+influxdb3-python
